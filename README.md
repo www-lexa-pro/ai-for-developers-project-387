@@ -128,7 +128,7 @@ Workflow **Codex в GitHub Issues** запускается на новом ко�
 | `/codex explain this issue` | Объясняет задачу с учётом описания и комментариев |
 | `/codex check setup` | Называет трекер, доступные скиллы и команду проверок |
 
-Префикс `/oc` поддерживается для обеих команд, включая
+Регистр букв в командах не важен. Префикс `/oc` поддерживается для обеих команд, включая
 `/oc explain this issue` из задания. Workflow использует официальный Codex
 GitHub Action с моделью `gpt-5.4-mini` и секретом `OPENAI_API_KEY`.
 Для этого способа достаточно GitHub Actions, установка OpenCode GitHub App
