@@ -1,0 +1,367 @@
+openapi: 3.0.0
+info:
+  title: Call Calendar
+  version: 0.0.0
+tags: []
+paths:
+  /api/bookings:
+    post:
+      operationId: createBooking
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingTypeNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingConflict'
+        '422':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingInput'
+    get:
+      operationId: listBookings
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Booking'
+  /api/health:
+    get:
+      operationId: getHealth
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/meeting-types:
+    get:
+      operationId: listMeetingTypes
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MeetingType'
+    post:
+      operationId: createMeetingType
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingType'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
+        '422':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMeetingTypeInput'
+  /api/meeting-types/{id}:
+    get:
+      operationId: getMeetingType
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingType'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingTypeNotFound'
+  /api/meeting-types/{id}/availability:
+    get:
+      operationId: getAvailability
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingTypeNotFound'
+components:
+  schemas:
+    Availability:
+      type: object
+      required:
+        - timeZone
+        - windowStart
+        - windowEnd
+        - days
+      properties:
+        timeZone:
+          type: string
+          enum:
+            - Europe/Moscow
+        windowStart:
+          type: string
+          format: date
+        windowEnd:
+          type: string
+          format: date
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailabilityDay'
+    AvailabilityDay:
+      type: object
+      required:
+        - date
+        - slots
+      properties:
+        date:
+          type: string
+          format: date
+        unavailableReason:
+          type: string
+          enum:
+            - weekend
+            - fully_booked
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailableSlot'
+    AvailableSlot:
+      type: object
+      required:
+        - start
+        - end
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+    Booking:
+      type: object
+      required:
+        - id
+        - meetingTypeId
+        - meetingTypeName
+        - durationMinutes
+        - start
+        - end
+        - name
+        - email
+      properties:
+        id:
+          type: string
+        meetingTypeId:
+          type: string
+        meetingTypeName:
+          type: string
+        durationMinutes:
+          type: integer
+          format: int32
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        name:
+          type: string
+        email:
+          type: string
+    BookingConflict:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - time_busy
+            - invalid_time
+        message:
+          type: string
+    CreateBookingInput:
+      type: object
+      required:
+        - meetingTypeId
+        - start
+        - name
+        - email
+      properties:
+        meetingTypeId:
+          type: string
+        start:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+    CreateMeetingTypeInput:
+      type: object
+      required:
+        - name
+        - durationMinutes
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: number
+          format: double
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    InternalError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - internal_error
+        message:
+          type: string
+    InvalidRequest:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - invalid_request
+        message:
+          type: string
+    MeetingType:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - durationMinutes
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: integer
+          format: int32
+    MeetingTypeNotFound:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - meeting_type_not_found
+        message:
+          type: string
+    ValidationError:
+      type: object
+      required:
+        - code
+        - message
+        - fields
+      properties:
+        code:
+          type: string
+          enum:
+            - validation_error
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string

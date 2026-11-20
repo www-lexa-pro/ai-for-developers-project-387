@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "2f2a9c27535076ca3ac28e8eeba48643324bf51b",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "initial-version": "0.1.0",
+      "include-component-in-tag": false,
+      "include-v-in-tag": true,
+      "pull-request-title-pattern": "chore${scope}: выпустить версию ${version}",
+      "pull-request-header": "Подготовка версии приложения по Conventional Commits."
+    }
+  }
+}

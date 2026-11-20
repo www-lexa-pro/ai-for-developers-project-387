@@ -1,0 +1,3 @@
+# Только адрес сервера. OAuth-токены хранятся вне репозитория.
+[mcp_servers.render]
+url = "https://mcp.render.com/mcp"

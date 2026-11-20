@@ -1,0 +1,10 @@
+amends "package://github.com/jdx/hk/releases/download/v2.12.0/hk@2.12.0#/Config.pkl"
+steps {
+  ["oxlint"] { glob = List("*.ts", "*.tsx"); exclude = "frontend/src/api/**"; check = "npm exec oxlint -- --deny-warnings {{files}}" }
+  ["oxfmt"] { glob = List("*.ts", "*.tsx", "*.js"); exclude = "frontend/src/api/**"; check = "npm exec oxfmt -- --check {{files}}" }
+}
+hooks {
+  ["pre-commit"] { fix = false; stage = false }
+  ["commit-msg"] { steps { ["message"] { check = "npm exec commitlint -- --edit {{commit_msg_file}}" } } }
+  ["pre-push"] { steps { ["check"] { check = "mise run check" } } }
+}

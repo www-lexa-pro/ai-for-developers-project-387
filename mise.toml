@@ -1,0 +1,53 @@
+[tools]
+go = "1.27.4"
+golangci-lint = "2.15.0"
+hk = "2.12.0"
+jactionlint = "2.5.0"
+node = "24.22.3"
+pitchfork = "2.34.0"
+shellcheck = "0.11.0"
+
+[settings]
+experimental = true
+
+[env]
+HK_MISE = "1"
+
+[daemons.backend]
+run = "cd backend && exec go run ."
+ready_cmd = "curl --fail --silent http://127.0.0.1:8080/api/health"
+
+[daemons.frontend]
+run = "exec npm exec vite -- --host 127.0.0.1"
+ready_port = 5173
+
+[tasks.setup]
+run = ["npm ci", "cd backend && go mod download", "hk install"]
+
+[tasks.generate]
+run = ["npm run generate", "cd backend && go tool oapi-codegen --config oapi-codegen.yaml ../api/generated/openapi.yaml"]
+
+[tasks.dev]
+daemons = ["backend", "frontend"]
+run = "mise daemons status"
+
+[tasks.status]
+run = "mise daemons status"
+
+[tasks.logs]
+run = "mise daemons logs"
+
+[tasks.stop]
+run = "mise daemons stop"
+
+[tasks.lint]
+run = ["npm exec oxlint -- --deny-warnings frontend/src/main.tsx frontend/src/App.tsx frontend/src/OwnerPage.tsx frontend/src/OwnerBookings.tsx frontend/src/AvailabilityPicker.tsx frontend/src/BookingPage.tsx frontend/src/booking.ts frontend/tests frontend/e2e playwright.config.ts vitest.config.ts vite.config.ts openapi-ts.config.ts", "npm exec oxfmt -- --check frontend/src/main.tsx frontend/src/App.tsx frontend/src/OwnerPage.tsx frontend/src/OwnerBookings.tsx frontend/src/AvailabilityPicker.tsx frontend/src/BookingPage.tsx frontend/src/booking.ts frontend/tests frontend/e2e playwright.config.ts vitest.config.ts vite.config.ts openapi-ts.config.ts commitlint.config.js", "cd backend && golangci-lint run && golangci-lint fmt --diff", "jactionlint .github/workflows/check.yml .github/workflows/release-please.yml"]
+
+[tasks.test]
+run = ["cd backend && go test -count=1 ./...", "npm run test:ui", "npm run test:e2e"]
+
+[tasks.build]
+run = ["cd backend && go build -o bin/calendar .", "npm exec vite -- build"]
+
+[tasks.check]
+run = ["mise run lint", "npm run typecheck", "mise run test", "mise run build", "node scripts/check-generated.mjs"]
