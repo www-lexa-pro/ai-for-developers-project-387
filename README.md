@@ -8,6 +8,10 @@
 Основа приложения — принятая версия первого календаря,
 [коммит `3c58a6e`](https://github.com/www-lexa-pro/ai-for-developers-project-386/commit/3c58a6e6dca53ad16ddb9328531c79a01a75924b).
 
+- [Исходная спецификация бронирования](https://github.com/www-lexa-pro/ai-for-developers-project-386/issues/5)
+- [Решение о едином календаре](https://github.com/www-lexa-pro/ai-for-developers-project-386/blob/3c58a6e6dca53ad16ddb9328531c79a01a75924b/docs/adr/0001-shared-booking-calendar.md)
+- [Решение о хранении данных в памяти](https://github.com/www-lexa-pro/ai-for-developers-project-386/blob/3c58a6e6dca53ad16ddb9328531c79a01a75924b/docs/adr/0002-in-memory-storage.md)
+
 Учебный проект Хекслета: https://ru.hexlet.io/programs/ai-for-developers
 Как это должно работать: https://files.hexlet.app/a/2ipc5m
 
