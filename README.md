@@ -142,6 +142,14 @@ GitHub Action с моделью `gpt-5.4-mini` и секретом `OPENAI_API_K
 обсуждения повторно. Время на ответ ограничено 10 минутами, на публикацию
 отведены 2 минуты. Одновременно выполняется один вызов модели.
 
+### Проверка в GitHub
+
+- Команда `/oc explain this issue` опубликовала ответ в проверочной задаче.
+  [Комментарий](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/1#issuecomment-7046730724) · [Прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/44787588522)
+- Команда `/codex check setup` подтвердила GitHub Issues, `mise run check`
+  и наличие `to-spec`, `to-tickets` и `implement-spec`.
+  [Комментарий](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/1#issuecomment-7046777559) · [Прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/44787964897)
+
 ## О Хекслете
 
 [Хекслет](https://ru.hexlet.io/) — школа программирования: авторские программы обучения с практикой, поддержкой наставников и реальными проектами, которые остаются в резюме. Этот репозиторий — один из таких проектов.
