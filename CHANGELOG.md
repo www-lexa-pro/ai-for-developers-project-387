@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0](https://github.com/www-lexa-pro/ai-for-developers-project-387/compare/v0.2.0...v0.3.0) (2026-11-21)
+
+
+### Features
+
+* добавить команду разбора обращений Codex ([f4895bf](https://github.com/www-lexa-pro/ai-for-developers-project-387/commit/f4895bf927212fdd4ffa8c5eb22379ad2d19c596))
+* принимать свободный текст в команде /oc ([16ed76c](https://github.com/www-lexa-pro/ai-for-developers-project-387/commit/16ed76cc4562e8901f3de690c4bd5bf69426132f))
+* принимать свободный текст в команде /oc ([1517846](https://github.com/www-lexa-pro/ai-for-developers-project-387/commit/1517846d2590853ad6686a8aaac30103a478fcc3)), closes [#1](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/1)
+* публиковать спецификации и тикеты через Codex ([7f0cb40](https://github.com/www-lexa-pro/ai-for-developers-project-387/commit/7f0cb405544c3fd2472c9dac9b798171e93c4ac0)), closes [#1](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/1)
+
 ## [0.2.0](https://github.com/www-lexa-pro/ai-for-developers-project-387/compare/v0.1.0...v0.2.0) (2026-11-21)
 
 
