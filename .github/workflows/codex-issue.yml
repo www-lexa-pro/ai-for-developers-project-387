@@ -17,7 +17,8 @@ jobs:
       (github.event.comment.body == '/codex explain this issue' ||
        github.event.comment.body == '/oc explain this issue' ||
        github.event.comment.body == '/codex check setup' ||
-       github.event.comment.body == '/oc check setup')
+       github.event.comment.body == '/oc check setup' ||
+       github.event.comment.body == '/oc triage')
     concurrency:
       group: codex-issue
       cancel-in-progress: false
@@ -55,6 +56,15 @@ jobs:
                 ;;
               */*' explain this issue')
                 printf '%s\n' 'Объясни цель задачи и ожидаемый результат с учётом её обсуждения и настроек проекта.'
+                ;;
+              '/oc triage')
+                cat <<'TRIAGE'
+          Прочитай заголовок, описание и обсуждение обращения. Сверь его
+          с относящимися к нему исходниками, тестами и документацией приложения.
+          Кратко изложи суть обращения и укажи, что подтверждает текущая реализация,
+          со ссылками на проверенные файлы. Если для дальнейшей работы не хватает
+          сведений, задай конкретные уточняющие вопросы. Код приложения не меняй.
+          TRIAGE
                 ;;
               *) exit 1 ;;
             esac
