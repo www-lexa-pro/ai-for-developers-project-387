@@ -7,7 +7,7 @@ on:
 permissions: {}
 
 jobs:
-  codex:
+  validate:
     if: >-
       github.repository == 'www-lexa-pro/ai-for-developers-project-387' &&
       !github.event.issue.pull_request &&
@@ -15,10 +15,26 @@ jobs:
       github.event.comment.user.type == 'User' &&
       github.event.comment.user.login == 'www-lexa-pro' &&
       (github.event.comment.body == '/codex explain this issue' ||
-       github.event.comment.body == '/oc explain this issue' ||
        github.event.comment.body == '/codex check setup' ||
-       github.event.comment.body == '/oc check setup' ||
-       github.event.comment.body == '/oc triage')
+       startsWith(github.event.comment.body, '/oc '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      accepted: ${{ steps.command.outputs.accepted }}
+    steps:
+      - name: Проверить команду
+        id: command
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+        run: |
+          # Validate before joining the concurrency group, where a new job can replace a pending one.
+          if [[ "${COMMAND,,}" != '/oc '* || "${COMMAND:4}" =~ [^[:space:]] ]]; then
+            printf '%s\n' 'accepted=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  codex:
+    needs: validate
+    if: needs.validate.outputs.accepted == 'true'
     concurrency:
       group: codex-issue
       cancel-in-progress: false
@@ -30,16 +46,13 @@ jobs:
     outputs:
       answer: ${{ steps.codex.outputs.final-message }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
       - name: Подготовить контекст задачи
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           COMMAND: ${{ github.event.comment.body }}
         run: |
+          request="${COMMAND:4}"
           gh issue view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
             --json number,title,body,comments > "$RUNNER_TEMP/codex-issue.json"
           {
@@ -51,10 +64,10 @@ jobs:
           PROMPT
             # GitHub Actions compares command strings without regard to case.
             case "${COMMAND,,}" in
-              */*' check setup')
+              '/oc check setup'|'/codex check setup')
                 printf '%s\n' 'Назови настроенный трекер и команду полной проверки. Проверь наличие и прочитай SKILL.md для to-spec, to-tickets и implement-spec. Назови найденные скиллы без их выполнения.'
                 ;;
-              */*' explain this issue')
+              '/oc explain this issue'|'/codex explain this issue')
                 printf '%s\n' 'Объясни цель задачи и ожидаемый результат с учётом её обсуждения и настроек проекта.'
                 ;;
               '/oc triage')
@@ -66,11 +79,18 @@ jobs:
           сведений, задай конкретные уточняющие вопросы. Код приложения не меняй.
           TRIAGE
                 ;;
+              '/oc '*)
+                printf '\nЗапрос доверенного автора из комментария, вызвавшего Codex\n%s\n' "$request"
+                ;;
               *) exit 1 ;;
             esac
             printf '\nДанные GitHub Issue (JSON)\n'
             cat "$RUNNER_TEMP/codex-issue.json"
           } > "$RUNNER_TEMP/codex-prompt.md"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Запустить Codex
         id: codex
         uses: openai/codex-action@306c6a196a99dcc6582530c396a19d2672d5e9ec # v1
