@@ -1,6 +1,8 @@
 name: Codex в GitHub Issues
 
 on:
+  issues:
+    types: [opened]
   issue_comment:
     types: [created]
 
@@ -12,23 +14,28 @@ jobs:
       github.repository == 'www-lexa-pro/ai-for-developers-project-387' &&
       !github.event.issue.pull_request &&
       github.event.issue.state == 'open' &&
-      github.event.comment.user.type == 'User' &&
-      github.event.comment.user.login == 'www-lexa-pro' &&
-      (github.event.comment.body == '/codex explain this issue' ||
-       github.event.comment.body == '/codex check setup' ||
-       startsWith(github.event.comment.body, '/oc '))
+      ((github.event_name == 'issues' &&
+        github.event.issue.user.type == 'User' &&
+        github.event.issue.user.login == 'www-lexa-pro' &&
+        !contains(github.event.issue.labels.*.name, 'ready-for-agent')) ||
+       (github.event_name == 'issue_comment' &&
+        github.event.comment.user.type == 'User' &&
+        github.event.comment.user.login == 'www-lexa-pro' &&
+        (github.event.comment.body == '/codex explain this issue' ||
+         github.event.comment.body == '/codex check setup' ||
+         startsWith(github.event.comment.body, '/oc '))))
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
       accepted: ${{ steps.command.outputs.accepted }}
     steps:
-      - name: Проверить команду
+      - name: Подтвердить автотриаж или проверить команду
         id: command
         env:
           COMMAND: ${{ github.event.comment.body }}
         run: |
           # Validate before joining the concurrency group, where a new job can replace a pending one.
-          if [[ "${COMMAND,,}" != '/oc '* || "${COMMAND:4}" =~ [^[:space:]] ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == issues || "${COMMAND,,}" != '/oc '* || "${COMMAND:4}" =~ [^[:space:]] ]]; then
             printf '%s\n' 'accepted=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -36,7 +43,7 @@ jobs:
     needs: validate
     if: needs.validate.outputs.accepted == 'true'
     concurrency:
-      group: codex-issue
+      group: ${{ github.event_name == 'issues' && format('codex-issue-triage-{0}', github.event.issue.number) || 'codex-issue' }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -65,6 +72,9 @@ jobs:
               python3 -c 'import json, sys; issue = json.load(sys.stdin); print(json.dumps(dict({k: issue[k] for k in ("number", "title", "body")}, comments=json.load(open(sys.argv[1])))))' "$RUNNER_TEMP/codex-comments.json" > "$destination"
           }
 
+          if [[ "$GITHUB_EVENT_NAME" == issues ]]; then
+            COMMAND='/oc triage'
+          fi
           request="${COMMAND:4}"
           mode=comment
           if [[ "${COMMAND,,}" =~ ^/oc[[:space:]]+(to-spec|to-tickets)([[:space:]]|$) ]]; then
@@ -94,7 +104,13 @@ jobs:
           if [[ "$mode" == missing-spec ]]; then
             exit 0
           fi
-          issue_context "$ISSUE_NUMBER" "$RUNNER_TEMP/codex-issue.json"
+          if [[ "$GITHUB_EVENT_NAME" == issues ]]; then
+            # Use the opening snapshot so later comments cannot influence automatic replies.
+            python3 -c 'import json, sys; issue = json.load(sys.stdin)["issue"]; print(json.dumps({k: issue[k] for k in ("number", "title", "body")}))' \
+              < "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/codex-issue.json"
+          else
+            issue_context "$ISSUE_NUMBER" "$RUNNER_TEMP/codex-issue.json"
+          fi
           {
             cat <<'PROMPT'
           Пиши по-русски. Прочитай AGENTS.md и документы в docs/agents/.
@@ -117,6 +133,12 @@ jobs:
                 cat <<'TICKETS'
           Прочитай .agents/skills/to-tickets/SKILL.md. По спецификации и её
           обсуждению подготовь небольшие проверяемые задачи с критериями приёмки.
+          Сверься с AGENTS.md и текущим контрактом в api/main.tsp. Если задача
+          меняет контракт API, в её критериях приёмки укажи конкретную операцию
+          и изменения в запросе и/или ответе, какие операции или модели нужно
+          обновить в api/main.tsp и что после этого нужно перегенерировать
+          артефакты командой mise run generate. Для задач без изменений
+          контракта API пропускай этот пункт.
           Верни только JSON без кодового блока: {"tickets":[{"id":"short-slug",
           "title":"одна строка","body":"Markdown","blocked_by":["id-иной-задачи"]}]}.
           Используй до 20 задач, ASCII-идентификаторы до 40 символов (строчные
@@ -139,9 +161,13 @@ jobs:
                 printf '%s\n' 'Объясни цель задачи и ожидаемый результат с учётом её обсуждения и настроек проекта.'
                 ;;
               '/oc triage')
+                if [[ "$GITHUB_EVENT_NAME" == issues ]]; then
+                  printf '%s\n' 'Прочитай заголовок и описание обращения из события открытия. Предложи следующий шаг.'
+                else
+                  printf '%s\n' 'Прочитай заголовок, описание и обсуждение обращения.'
+                fi
                 cat <<'TRIAGE'
-          Прочитай заголовок, описание и обсуждение обращения. Сверь его
-          с относящимися к нему исходниками, тестами и документацией приложения.
+          Сверь обращение с относящимися к нему исходниками, тестами и документацией приложения.
           Кратко изложи суть обращения и укажи, что подтверждает текущая реализация,
           со ссылками на проверенные файлы. Если для дальнейшей работы не хватает
           сведений, задай конкретные уточняющие вопросы. Код приложения не меняй.
