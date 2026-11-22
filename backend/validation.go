@@ -32,7 +32,7 @@ func validateJSONBody(c *gin.Context) {
 	var nonNullFields []string
 	switch c.Request.URL.Path {
 	case "/api/bookings":
-		nonNullFields = []string{"meetingTypeId", "start", "name", "email"}
+		nonNullFields = []string{"meetingTypeId", "start", "name", "email", "topic"}
 	case "/api/meeting-types":
 		nonNullFields = []string{"name", "description", "durationMinutes"}
 	}
