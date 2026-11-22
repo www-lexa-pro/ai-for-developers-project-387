@@ -219,3 +219,42 @@ docker run --rm -e PORT=9090 -p 127.0.0.1:18081:9090 cal:docker-local
 `CAL_E2E_URL=http://127.0.0.1:18081 npm run test:e2e`.
 
 Render: [безопасная конфигурация и подключение MCP](docs/render.md).
+
+## Автоматическое ревью PR
+
+Workflow «Авторевью календаря» запускается при открытии, повторном открытии и
+добавлении коммитов в PR из ветки этого репозитория. После принятия настройки
+ревьюер получает критерии из `REVIEW.md` базового коммита и diff конкретной
+версии PR. Результат появляется в обсуждении PR как review с комментарием,
+полным SHA и ссылкой на прогон Actions. Новый коммит отменяет активный прогон
+для этого PR. Для анализа отведено 10 минут, для публикации — 2 минуты.
+Ревью использует существующий секрет `OPENAI_API_KEY`.
+
+### Когда PR открывает агент внутри Actions
+
+Владелец регистрирует приватное GitHub App и устанавливает его только в этот
+репозиторий. Права репозитория для приложения — **Contents: Read and write**
+и **Pull requests: Read and write**. В настройках Actions сохраните Client ID
+в переменной `PR_AUTHOR_APP_CLIENT_ID`, а приватный ключ — в секрете
+`PR_AUTHOR_APP_PRIVATE_KEY`. Ключ передаётся только доверенному workflow автора.
+
+В workflow автора получите токен установки, а затем используйте выход
+`steps.pr-author.outputs.token` как `GH_TOKEN` для `gh pr create` и как
+учётные данные для `git push`. Если checkout сохранил встроенный токен,
+отключите его через `persist-credentials: false` и настройте HTTPS через
+`gh auth setup-git` с токеном приложения перед push.
+
+```yaml
+- name: Получить токен автора PR
+  id: pr-author
+  uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
+  with:
+    client-id: ${{ vars.PR_AUTHOR_APP_CLIENT_ID }}
+    private-key: ${{ secrets.PR_AUTHOR_APP_PRIVATE_KEY }}
+    permission-contents: write
+    permission-pull-requests: write
+```
+
+События от токена GitHub App запускают обычное авторевью. При использовании
+встроенного токена автора GitHub может потребовать вручную разрешить запуск.
+[Документация GitHub о токенах и событиях](https://docs.github.com/en/actions/concepts/security/github_token).
