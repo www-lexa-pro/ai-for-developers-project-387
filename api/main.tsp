@@ -106,6 +106,7 @@ model Booking {
   end: utcDateTime;
   name: string;
   email: string;
+  topic?: string;
 }
 
 model CreateBookingInput {
@@ -113,6 +114,7 @@ model CreateBookingInput {
   start: string;
   name: string;
   email: string;
+  topic?: string;
 }
 
 model BookingConflict {
