@@ -168,6 +168,7 @@ jobs:
           import html
           import json
           import os
+          import re
           import subprocess
           from pathlib import Path
 
@@ -192,6 +193,22 @@ jobs:
           def text(value):
               # Render external text as plain text without mentions or HTML.
               return html.escape(" ".join(value.split())).replace("@", "＠").replace("`", "ʼ")
+
+          def matches_finding(issue, url):
+              description = html.unescape(f"{issue['title']}\n{issue['body'] or ''}")
+              addresses = {
+                  address.rstrip(".,;")
+                  for address in re.findall(r"https?://[^\s<>`\"')\]]+", description)
+              }
+              availability = re.search(
+                  r"недоступ|не открыва|ошибк[аи] (?:запроса|соединения)|"
+                  r"unavailable|(?:cannot|can't|could not) (?:open|reach|connect)|"
+                  r"(?:connection|request) (?:failed|refused|timed out)|"
+                  r"\bHTTP(?:/\d(?:\.\d)?)?\s+(?:[1345]\d{2})\b|"
+                  r"\bcurl(?: error)?[ (:]+[1-9]\d*\b",
+                  description, re.IGNORECASE,
+              )
+              return url in addresses and availability is not None
 
           audit = json.loads(Path("audit.json").read_text()) if Path("audit.json").exists() else {
               "url": "", "result": "Отчёт не сформирован", "kind": "configuration",
@@ -225,8 +242,13 @@ jobs:
                   if not summary or (duplicate is not None and type(duplicate) is not int):
                       raise ValueError("Некорректный ответ Codex.")
                   issues = json.loads(Path("audit-issues.json").read_text())
-                  if duplicate is not None and duplicate not in {issue["number"] for issue in issues}:
-                      raise ValueError("Codex указал номер вне списка задач.")
+                  candidate = next((issue for issue in issues if issue["number"] == duplicate), None)
+                  # Codex suggests a match. The issue text must support it before it can suppress a finding.
+                  if duplicate is not None and (
+                      candidate is None or not matches_finding(candidate, audit["url"])
+                  ):
+                      duplicate = None
+                      summary = ""
               except (OSError, KeyError, TypeError, ValueError) as error:
                   print(f"Не удалось обработать итог Codex: {type(error).__name__}")
                   failed = True
@@ -241,20 +263,29 @@ jobs:
                       existing = next((
                           issue["number"] for issue in issues
                           if (issue["body"] or "").splitlines()[:1] == [issue_marker]
+                          and matches_finding(issue, audit["url"])
                       ), duplicate)
                       if existing:
                           outcome = f"Новых находок нет. Находка уже описана в #{existing}."
                       else:
-                          created = api(issues_path, {
-                              "title": mode + "Страница календаря недоступна",
-                              "body": f"{issue_marker}\nPart of #39\n\n{facts}",
-                          })
-                          outcome = f"Создана задача #{created['number']}."
+                          try:
+                              created = api(issues_path, {
+                                  "title": mode + "Страница календаря недоступна",
+                                  "body": f"{issue_marker}\nPart of #39\n\n{facts}",
+                              })
+                              outcome = f"Создана задача #{created['number']}."
+                          except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+                              outcome = "Отчёт разобран, но задачу создать не удалось."
+                              failed = True
 
               body = f"{facts}\n\n{outcome}"
               if summary:
                   body += f"\n\n> {summary}"
-              api(comments_path, {"body": f"{marker}\n{body}"})
+              try:
+                  api(comments_path, {"body": f"{marker}\n{body}"})
+              except (OSError, subprocess.SubprocessError, ValueError):
+                  outcome += " Опубликовать итог в #39 не удалось."
+                  raise
           finally:
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
                   stream.write(f"{facts}\n\n{outcome}\n")
