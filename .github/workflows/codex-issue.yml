@@ -357,6 +357,8 @@ jobs:
           mkdir -p "$artifact"
           if [[ -z "$REMOTE_SHA" ]]; then
             test "$(git rev-parse HEAD~1)" = "$GITHUB_SHA"
+            npm exec oxfmt -- --write frontend/tests/booking.test.tsx
+            npm exec oxfmt -- --check frontend/tests/booking.test.tsx
             git add -A
             if git diff --cached --quiet; then
               echo 'Codex не подготовил изменения.' >&2
