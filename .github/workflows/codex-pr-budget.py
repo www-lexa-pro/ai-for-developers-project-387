@@ -54,7 +54,7 @@ def main():
         target != expected
         or comment["user"]["type"] != "User"
         or comment["user"]["login"] != OWNER
-        or not re.match(r"^/oc +\S", comment["body"], re.IGNORECASE)
+        or not re.match(r"^/oc +\S", comment["body"].lstrip(), re.IGNORECASE)
     ):
         return
     pull = read(f"pulls/{pr}")
