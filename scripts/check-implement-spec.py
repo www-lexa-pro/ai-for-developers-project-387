@@ -1,8 +1,10 @@
+import json
 import os
 import runpy
 import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 workflow = Path(".github/workflows/codex-issue.yml").read_text()
 assert "ref: ${{ github.sha }}" in workflow.split("\n  implement-spec:", 1)[1]
@@ -39,8 +41,8 @@ blocker = {"number": 11, "repository_url": api_url}
 data = {
     "issues/5": {"state": "open"},
     f"issues/comments/{module['APPROVAL']}": approval,
-    "issues/10": {"state": "open", "body": "<!-- codex-spec source=5 -->", "updated_at": time},
-    "issues/10/sub_issues": [{"number": n, "state": "open", "body": str(n), "updated_at": time} for n in (11, 12, 13)],
+    "issues/10": {"state": "open", "title": "Spec", "body": "<!-- codex-spec source=5 -->", "updated_at": time},
+    "issues/10/sub_issues": [{"number": n, "state": "open", "title": str(n), "body": str(n), "updated_at": time} for n in (11, 12, 13)],
     "issues/11/dependencies/blocked_by": [],
     "issues/12/dependencies/blocked_by": [blocker],
     "issues/13/dependencies/blocked_by": [blocker],
@@ -52,6 +54,12 @@ prepare.__globals__["api"] = lambda path, **kw: data[path]
 event = {"action": "created", "repository": {"full_name": repo},
          "issue": {"number": 5, "state": "open"}, "comment": {
              "user": user, "body": "/oc implement-spec #10", "created_at": time}}
+prepare.__globals__["APPROVED_AT"] = time
+prepare.__globals__["APPROVED_TEXT"] = {
+    item["number"]: module["fingerprint"](item)
+    for item in data["issues/10/sub_issues"]
+}
+prepare.__globals__["APPROVED_TEXT"][10] = module["fingerprint"](data["issues/10"])
 context = prepare(event)
 assert context["order"] == [[11], [12, 13]]
 for key in ("mode", "source", "spec", "order"):
@@ -61,6 +69,8 @@ for target, key, invalid in [
     (event["comment"], "body", "/oc implement-spec #99"),
     (event["comment"], "body", "/oc \nimplement-spec #10"),
     (approval, "body", "позже"),
+    (data["issues/10"], "body", "<!-- codex-spec source=5 --> новая редакция"),
+    (data["issues/10/sub_issues"][0], "title", "другой заголовок"),
     (data["issues/10"], "updated_at", "2026-11-24T00:00:00Z"),
     *((ticket, "updated_at", "2026-11-24T00:00:00Z")
       for ticket in data["issues/10/sub_issues"]),
@@ -76,3 +86,59 @@ for target, key, invalid in [
         raise AssertionError(key)
     finally:
         target[key] = old
+
+# Exercise the publication decisions without a GitHub token or a remote write.
+publisher = runpy.run_path(".github/workflows/codex-implement-publish.py")["main"]
+sha = "a" * 40
+pr_url = f"https://github.com/{repo}/pull/99"
+
+
+def publication(mode, *, pulls=(), remote="", app_id="123", checked_sha=sha):
+    calls, outputs = [], {}
+
+    def fake_run(*args):
+        calls.append(args)
+        if args[:3] == ("gh", "api", "users/hexlet-ai%5Bbot%5D"):
+            return app_id
+        if args[:3] == ("gh", "api", "--paginate"):
+            return json.dumps([pulls])
+        if args[:2] == ("git", "ls-remote"):
+            return remote
+        if args[:2] == ("git", "rev-parse"):
+            return checked_sha
+        if args[:3] == ("gh", "pr", "create"):
+            assert sha in args[-1] and "attempts/2" in args[-1]
+            return pr_url
+        return ""
+
+    with tempfile.TemporaryDirectory() as directory:
+        event_path = Path(directory, "event.json")
+        event_path.write_text(json.dumps({"comment": {"html_url": "command"}}))
+        Path(directory, "implement-spec.json").write_text(json.dumps({"approval": "approval"}))
+        with patch.dict(os.environ, {
+            "GITHUB_REPOSITORY": repo, "TRUSTED_BOT_ID": "123", "APP_SLUG": "hexlet-ai",
+            "CHECKED_SHA": sha, "CHECK_ATTEMPT": "2", "RUNNER_TEMP": directory,
+            "GITHUB_EVENT_PATH": str(event_path), "GITHUB_SERVER_URL": "https://github.com",
+            "GITHUB_RUN_ID": "1234",
+        }), patch.dict(publisher.__globals__, {"run": fake_run, "output": outputs.__setitem__}):
+            publisher(mode)
+    return calls, outputs
+
+
+calls, outputs = publication("publish")
+assert outputs == {"pr": pr_url}
+assert sum(args[:2] == ("git", "push") for args in calls) == 1
+calls, outputs = publication("inspect", pulls=[{"user": {"id": 123}, "html_url": pr_url}])
+assert outputs == {"pr": pr_url} and len(calls) == 1
+calls, outputs = publication("publish", remote=f"{sha}\trefs/heads/implement/spec-10")
+assert outputs == {"pr": pr_url} and all(args[:2] != ("git", "push") for args in calls)
+for invalid in ({"app_id": "456"}, {"remote": "b" * 40}, {"checked_sha": "b" * 40},
+                {"pulls": [{"user": {"id": 456}, "html_url": pr_url}]}):
+    try:
+        publication("publish", **invalid)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(invalid)
+assert "always()" not in workflow.split("\n  publish-implementation:", 1)[1].split("\n  report-", 1)[0]
+print("Публикация, повторный запуск и восстановление после push проверены на имитации GitHub.")
