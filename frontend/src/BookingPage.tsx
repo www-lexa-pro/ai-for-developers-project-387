@@ -49,6 +49,7 @@ export function BookingPage({
   const [refreshGeneration, setRefreshGeneration] = useState(0);
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
+  const [topic, setTopic] = useState("");
   function uncertain() {
     onUnknownChange(true);
     setNeedsRefresh(true);
@@ -81,6 +82,7 @@ export function BookingPage({
           start: selection.start,
           name: trim(guest.name),
           email: trim(guest.email),
+          ...(trim(topic) ? { topic: trim(topic) } : {}),
         },
       });
       if (
@@ -124,6 +126,7 @@ export function BookingPage({
             : "Выберите новое время: прежнее время больше не входит в расписание или окно записи",
         );
         setSelection(null);
+        setTopic("");
         setRefreshGeneration((value) => value + 1);
       } else if (
         result.response?.status === 404 &&
@@ -181,6 +184,13 @@ export function BookingPage({
       )}
       <form onSubmit={submit} noValidate>
         <Stack mt="md">
+          <TextInput
+            label="Тема звонка"
+            placeholder="Например, вопросы по проекту"
+            value={topic}
+            disabled={sending || needsRefresh || !selection}
+            onChange={(event) => setTopic(event.currentTarget.value)}
+          />
           <TextInput
             label="Имя"
             error={fields.name}

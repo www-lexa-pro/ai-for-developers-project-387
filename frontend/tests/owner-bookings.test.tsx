@@ -6,12 +6,14 @@ const booking = {
   id: "b",
   meetingTypeId: "t",
   meetingTypeName: "Разбор задачи",
+  topic: "Вопросы по проекту",
   durationMinutes: 45,
   start: "2026-11-17T09:00:00+03:00",
   end: "2026-11-17T09:45:00+03:00",
   name: "Алексей",
   email: "A+tag@Example.com",
 };
+const bookingWithoutTopic = { ...booking, topic: "" };
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 beforeEach(() => {
@@ -44,6 +46,7 @@ test("встречи загружаются независимо от типов
   const section = await screen.findByRole("region", { name: "Предстоящие встречи" });
   expect(await within(section).findByText("Разбор задачи")).toBeTruthy();
   for (const text of [
+    "Вопросы по проекту",
     "Алексей",
     "A+tag@Example.com",
     "45 мин",
@@ -135,4 +138,14 @@ test("неверная длительность встречи показыва�
   expect(await screen.findByText("Не удалось загрузить встречи")).toBeTruthy();
   expect(screen.queryByText("541 мин")).toBeNull();
   expect(screen.queryByText("Алексей")).toBeNull();
+});
+
+test("у записи без темы список не показывает лишний текст", async () => {
+  vi.stubGlobal("fetch", async (request: Request) =>
+    request.url.endsWith("/api/bookings") ? response([bookingWithoutTopic]) : response({}, 500),
+  );
+  render(<App />);
+  const section = await screen.findByRole("region", { name: "Предстоящие встречи" });
+  expect(await within(section).findByText("Разбор задачи")).toBeTruthy();
+  expect(within(section).queryByText("Вопросы по проекту")).toBeNull();
 });
