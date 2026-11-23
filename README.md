@@ -349,6 +349,8 @@ Workflow **Аудит календаря** проверяет страницу �
 
 На странице завершённого прогона в разделе **Artifacts** скачайте архив `calendar-audit`. В файле `calendar-audit.txt` указаны адрес и HTTP-статус или ошибка запроса. Артефакт сохраняется и при недоступности страницы. Краткие итоги со ссылками на прогоны публикуются в [тикете #39](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/39).
 
-- [Обычный прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45193330177)
-- [Учебный прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45191427864)
-- [Учебная задача #42](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/42)
+Задача считается дублем, если совпадают адрес страницы и признак проблемы доступности.
+
+- [Обычный прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45193330177) вернул HTTP 200. В журнале аудита записано «Новых находок нет».
+- [Первый учебный прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45191427864) создал [учебную задачу #42](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/42).
+- [Повторный учебный прогон из `main`](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45197137763) нашёл #42. Второй задачи не появилось.
