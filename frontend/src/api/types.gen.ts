@@ -31,6 +31,7 @@ export type Booking = {
     end: string;
     name: string;
     email: string;
+    topic?: string;
 };
 
 export type BookingConflict = {
@@ -43,6 +44,7 @@ export type CreateBookingInput = {
     start: string;
     name: string;
     email: string;
+    topic?: string;
 };
 
 export type CreateMeetingTypeInput = {

@@ -68,6 +68,7 @@ export function OwnerBookings() {
       {bookings?.map((booking) => (
         <article key={booking.id}>
           <Title order={3}>{booking.meetingTypeName}</Title>
+          {booking.topic && <Text>{booking.topic}</Text>}
           <Text>{date.format(new Date(booking.start))}</Text>
           <Text>
             {time.format(new Date(booking.start))}–{time.format(new Date(booking.end))} (Москва)

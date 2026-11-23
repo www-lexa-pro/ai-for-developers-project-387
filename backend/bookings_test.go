@@ -415,3 +415,62 @@ func TestOwnerBookingsAreFutureSortedAcrossTypes(t *testing.T) {
 		t.Fatalf("past bookings: %+v", bookings)
 	}
 }
+
+func TestBookingTopic(t *testing.T) {
+	app := bookingApp(func() time.Time {
+		return time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	})
+	defer app.Close()
+	id := bookingType(t, app)
+
+	for _, tc := range []struct {
+		time   string
+		input  map[string]any
+		want   any
+		status int
+	}{
+		{"09:00", map[string]any{"topic": "  Обсуждение проекта  "}, "Обсуждение проекта", 201},
+		{"09:30", nil, nil, 201},
+		{"10:00", map[string]any{"topic": ""}, nil, 201},
+		{"10:30", map[string]any{"topic": "   "}, nil, 201},
+		{"11:00", map[string]any{"topic": nil}, nil, 400},
+		{"11:00", map[string]any{"topic": 123}, nil, 400},
+		{"09:00", map[string]any{"topic": "Другой звонок"}, nil, 409},
+	} {
+		input := map[string]any{
+			"meetingTypeId": id, "start": "2026-11-16T" + tc.time + ":00+03:00",
+			"name": "Гость", "email": "a@example.com",
+		}
+		for key, value := range tc.input {
+			input[key] = value
+		}
+		status, body := bookingPost(t, app, input)
+		if status != tc.status {
+			t.Fatalf("input %v: got %d %v, want status %d", input, status, body, tc.status)
+		}
+		if status == 201 {
+			assertBookingTopic(t, body, tc.want)
+		}
+		if status == 409 && body["code"] != "time_busy" {
+			t.Fatalf("expected time_busy, got %v", body)
+		}
+	}
+
+	var bookings []map[string]any
+	getJSON(t, app.URL+"/api/bookings", 200, &bookings)
+	if len(bookings) != 4 {
+		t.Fatalf("expected four bookings, got %v", bookings)
+	}
+	assertBookingTopic(t, bookings[0], "Обсуждение проекта")
+	for _, booking := range bookings[1:] {
+		assertBookingTopic(t, booking, nil)
+	}
+}
+
+func assertBookingTopic(t *testing.T, booking map[string]any, want any) {
+	t.Helper()
+	topic, exists := booking["topic"]
+	if topic != want || exists != (want != nil) {
+		t.Fatalf("expected topic %v, got booking %v", want, booking)
+	}
+}

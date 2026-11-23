@@ -72,6 +72,86 @@ test("гость записывается и видит точное подтв�
   expect(await screen.findByLabelText("Имя")).toHaveProperty("value", "");
 });
 
+test("гость может указать тему звонка или оставить её пустой", async () => {
+  const submitted: unknown[] = [];
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.method === "POST") {
+      submitted.push(await request.json());
+      return respond(
+        {
+          id: "booking",
+          meetingTypeId: type.id,
+          meetingTypeName: type.name,
+          durationMinutes: 15,
+          ...slot,
+          name: "Алексей",
+          email: "a@example.com",
+        },
+        201,
+      );
+    }
+    const path = new URL(request.url).pathname;
+    return respond(
+      path.endsWith("/availability") ? snapshot : path === "/api/meeting-types" ? [type] : type,
+    );
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", { name: /17 ноября/ }));
+  await userEvent.click(screen.getByRole("button", { name: "09:00–09:15" }));
+  await userEvent.type(screen.getByLabelText("Тема звонка"), "  Вопросы по проекту  ");
+  await userEvent.type(screen.getByLabelText("Имя"), "Алексей");
+  await userEvent.type(screen.getByLabelText("Email"), "a@example.com");
+  await userEvent.click(screen.getByRole("button", { name: "Записаться" }));
+  expect(await screen.findByText("Вы записаны")).toBeTruthy();
+  expect(submitted).toEqual([
+    {
+      meetingTypeId: "intro",
+      start: slot.start,
+      name: "Алексей",
+      email: "a@example.com",
+      topic: "Вопросы по проекту",
+    },
+  ]);
+});
+
+test("пустая тема не попадает в запрос", async () => {
+  let submitted: unknown;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.method === "POST") {
+      submitted = await request.json();
+      return respond(
+        {
+          id: "booking",
+          meetingTypeId: type.id,
+          meetingTypeName: type.name,
+          durationMinutes: 15,
+          ...slot,
+          name: "Алексей",
+          email: "a@example.com",
+        },
+        201,
+      );
+    }
+    const path = new URL(request.url).pathname;
+    return respond(
+      path.endsWith("/availability") ? snapshot : path === "/api/meeting-types" ? [type] : type,
+    );
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", { name: /17 ноября/ }));
+  await userEvent.click(screen.getByRole("button", { name: "09:00–09:15" }));
+  await userEvent.type(screen.getByLabelText("Имя"), "Алексей");
+  await userEvent.type(screen.getByLabelText("Email"), "a@example.com");
+  await userEvent.click(screen.getByRole("button", { name: "Записаться" }));
+  expect(await screen.findByText("Вы записаны")).toBeTruthy();
+  expect(submitted).toEqual({
+    meetingTypeId: "intro",
+    start: slot.start,
+    name: "Алексей",
+    email: "a@example.com",
+  });
+});
+
 test.each(["network", "500", "malformed"])(
   "неизвестный результат %s требует обновления и нового выбора, без повторного POST",
   async (failure) => {
