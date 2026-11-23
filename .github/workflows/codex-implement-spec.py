@@ -1,4 +1,5 @@
 """Validate the agreed implementation before handing repository data to Codex."""
+import hashlib
 import json
 import os
 import re
@@ -10,6 +11,13 @@ OWNER = "www-lexa-pro"
 REPO = f"{OWNER}/ai-for-developers-project-387"
 COMMIT = "8d57905dd7c4760a1339d811ff6396c116002235"
 APPROVAL = 7062208806
+APPROVED_AT = "2026-11-21T11:55:17Z"
+APPROVED_TEXT = {
+    10: "8680511fd78393c56026cf165a9b3eb6eeea7d608c6b9acca6fa2520f1c305ad",
+    11: "3c958f0a0aae80d53e38e851d7b986adfe30dced902bd72c1dd85ad498b0fb24",
+    12: "e1533813203e993601ad1953b529b7551c42a064ee038511f72682279972da36",
+    13: "a3740b59ff429951abfd96253bc78f36d04b686a05eee0c480e9f804ff48df55",
+}
 AGREEMENT = (
     "Согласовано. Берём в работу спецификацию #10 и тикеты #11, #12 и #13. "
     "Сначала выполняем #11, затем #12 и #13. Тема необязательна и показывается "
@@ -49,6 +57,11 @@ def route(event):
     return 5, 10
 
 
+def fingerprint(issue):
+    text = json.dumps([issue["title"], issue["body"]], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def prepare(event):
     source, number = route(event)
     requested_at = event["comment"]["created_at"]
@@ -60,7 +73,7 @@ def prepare(event):
         and approval["user"]["login"] == OWNER
         and approval["user"]["type"] == "User"
         and approval["body"].strip() == AGREEMENT
-        and approval["updated_at"] <= requested_at,
+        and approval["updated_at"] == APPROVED_AT <= requested_at,
         "Не найдено действующее согласование владельца по #10 и #11–#13.",
     )
     spec = api(f"issues/{number}")
@@ -79,12 +92,9 @@ def prepare(event):
                  if item["repository_url"] == f"https://api.github.com/repos/{REPO}"}
         require(local == expected and len(blockers) == len(expected),
                 f"Изменились зависимости #{ticket}.")
-    pull = api("pulls/17")
-    require(pull["state"] == "open" and pull["head"]["repo"]["full_name"] == REPO
-            and pull["head"]["ref"] == "feat/387-booking-topic" and pull["base"]["ref"] == "main",
-            "PR #17 больше не подходит как источник #11.")
-    require(any(item["sha"] == COMMIT for item in api("pulls/17/commits", pages=True)),
-            "Коммит #11 отсутствует в PR #17.")
+    for key, requirement in {number: spec, **tickets}.items():
+        require(fingerprint(requirement) == APPROVED_TEXT[key],
+                f"Текст #{key} отличается от согласованной версии.")
     return {
         "mode": "implement-spec", "source": source, "spec": number,
         "order": [[11], [12, 13]], "specification": spec["body"],
@@ -93,10 +103,21 @@ def prepare(event):
     }
 
 
+def check_source():
+    pull = api("pulls/17")
+    require(pull["state"] == "open" and pull["head"]["repo"]["full_name"] == REPO
+            and pull["head"]["ref"] == "feat/387-booking-topic" and pull["base"]["ref"] == "main",
+            "PR #17 больше не подходит как источник #11.")
+    require(any(item["sha"] == COMMIT for item in api("pulls/17/commits", pages=True)),
+            "Коммит #11 отсутствует в PR #17.")
+
+
 if __name__ == "__main__":
     try:
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
         context = prepare(event)
+        if "--check-source" in sys.argv:
+            check_source()
     except (ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         print(f"Подготовка остановлена. {error}", file=sys.stderr)
         sys.exit(1)
