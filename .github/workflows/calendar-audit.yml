@@ -16,5 +16,34 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Проверить запуск каркаса
-        run: echo "Каркас аудита календаря запущен."
+      - name: Проверить доступность календаря
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          report=calendar-audit.txt
+          printf 'APP_URL: %s\n' "$APP_URL" > "$report"
+
+          if [[ -z "$APP_URL" ]]; then
+            printf 'Ошибка: переменная APP_URL не задана.\n' >> "$report"
+            exit 1
+          fi
+
+          if status=$(curl --silent --show-error --location \
+            --proto '=http,https' --proto-redir '=http,https' \
+            --connect-timeout 10 --max-time 60 \
+            --output /dev/null --write-out '%{http_code}' -- "$APP_URL" 2>> "$report"); then
+            printf 'HTTP-статус: %s\n' "$status" >> "$report"
+            [[ "$status" == 2[0-9][0-9] ]]
+          else
+            code=$?
+            printf 'Ошибка запроса: код curl %s.\n' "$code" >> "$report"
+            exit "$code"
+          fi
+
+      - name: Загрузить отчёт аудита
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: calendar-audit
+          path: calendar-audit.txt
+          if-no-files-found: error
