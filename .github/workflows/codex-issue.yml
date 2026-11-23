@@ -357,9 +357,16 @@ jobs:
           mkdir -p "$artifact"
           if [[ -z "$REMOTE_SHA" ]]; then
             test "$(git rev-parse HEAD~1)" = "$GITHUB_SHA"
-            npm exec oxfmt -- --write frontend/tests/booking.test.tsx
-            npm exec oxfmt -- --check frontend/tests/booking.test.tsx
             git add -A
+            # Match the oxfmt hook in hk.pkl, including newly added files and excluding deletions.
+            git diff --cached --name-only --no-renames --diff-filter=ACM -z -- \
+              '*.ts' '*.tsx' '*.js' ':(exclude)frontend/src/api/**' > "$RUNNER_TEMP/implement-format-files"
+            mapfile -d '' -t format_files < "$RUNNER_TEMP/implement-format-files"
+            if (( ${#format_files[@]} )); then
+              npm exec oxfmt -- --write "${format_files[@]/#/.\/}"
+              npm exec oxfmt -- --check "${format_files[@]/#/.\/}"
+              git add -- "${format_files[@]}"
+            fi
             if git diff --cached --quiet; then
               echo 'Codex не подготовил изменения.' >&2
               exit 1
