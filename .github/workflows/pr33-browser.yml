@@ -1,0 +1,61 @@
+name: Независимая браузерная проверка PR 33
+
+on:
+  push:
+    branches: [test/387-pr33-browser]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CAL_TEST_ARTIFACTS: ${{ runner.temp }}/pr33-evidence/playwright
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Зафиксировать SHA ветки PR
+        id: pin
+        run: |
+          mkdir -p "$RUNNER_TEMP/pr33-evidence"
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/pulls/33" --jq '.head.sha')
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ steps.pin.outputs.sha }}
+          path: application
+          persist-credentials: false
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
+        with:
+          version: 2026.11.7
+          working_directory: application
+      - name: Запустить браузерные сценарии на SHA PR
+        working-directory: application
+        env:
+          EXPECTED_SHA: ${{ steps.pin.outputs.sha }}
+          GH_TOKEN: ''
+        run: |
+          set -o pipefail
+          evidence="$RUNNER_TEMP/pr33-evidence"
+          actual=$(git rev-parse HEAD)
+          printf 'PR #33\nОжидаемый SHA: %s\nФактический SHA: %s\n' "$EXPECTED_SHA" "$actual" | tee "$evidence/result.txt"
+          test "$actual" = "$EXPECTED_SHA"
+          cp ../.github/browser-checks/pr33.spec.ts frontend/e2e/pr33-independent.spec.ts
+          npm ci
+          npm exec playwright install -- --with-deps chromium
+          result=0
+          mise exec -- npm exec playwright test -- frontend/e2e/pr33-independent.spec.ts --trace on 2>&1 | tee "$evidence/playwright.log" || result=$?
+          printf 'Код завершения Playwright: %s\n' "$result" | tee -a "$evidence/result.txt"
+          exit "$result"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: pr33-browser-${{ steps.pin.outputs.sha }}
+          path: ${{ runner.temp }}/pr33-evidence/
+          if-no-files-found: error
