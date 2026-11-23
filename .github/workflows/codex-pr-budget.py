@@ -1,4 +1,5 @@
 """Reserve one persistent attempt before exposing the model key."""
+from datetime import datetime, timedelta
 import json
 import os
 import re
@@ -40,9 +41,19 @@ def reserve(pr, sha, run_id, attempt):
 
 def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
-    discussion = os.environ["GITHUB_EVENT_NAME"] == "issue_comment"
-    pr = str(event["issue"]["number"] if discussion else event["pull_request"]["number"])
-    comment_id = str(event["comment"]["id"])
+    source = event["workflow_run"]
+    if (source["path"] != ".github/workflows/codex-pr.yml"
+        or source["repository"]["full_name"] != os.environ["GITHUB_REPOSITORY"]
+        or source["actor"]["login"] != OWNER
+        or source["event"] not in {"issue_comment", "pull_request_review_comment"}):
+        return
+    signal_path = Path(os.environ["RUNNER_TEMP"], "pr-command", "request.json")
+    if signal_path.stat().st_size > 1024:
+        raise ValueError("Invalid signal size")
+    signal = json.loads(signal_path.read_text())
+    discussion = source["event"] == "issue_comment"
+    pr = signal["pr"]
+    comment_id = signal["comment"]
     if not all(re.fullmatch(r"[1-9][0-9]*", item) for item in (pr, comment_id)):
         raise ValueError("Invalid PR or comment ID")
     endpoint = "issues/comments" if discussion else "pulls/comments"
@@ -52,6 +63,11 @@ def main():
     expected += f"/{'issues' if discussion else 'pulls'}/{pr}"
     if (
         target != expected
+        or not timedelta(0) <= (
+            datetime.fromisoformat(source["created_at"]) - datetime.fromisoformat(comment["created_at"])
+        ) <= timedelta(minutes=5)
+        or comment["updated_at"] != comment["created_at"]
+        or comment["user"]["id"] != source["actor"]["id"]
         or comment["user"]["type"] != "User"
         or comment["user"]["login"] != OWNER
         or not re.match(r"^/oc +\S", comment["body"].lstrip(), re.IGNORECASE)
@@ -60,12 +76,18 @@ def main():
     pull = read(f"pulls/{pr}")
     if pull["state"] != "open" or (pull["head"]["repo"] or {}).get("full_name") != os.environ["GITHUB_REPOSITORY"]:
         return
+    branch = pull["head"]["ref"]
+    if branch == "main" or (not discussion and branch != source["head_branch"]):
+        return
     sha = pull["head"]["sha"]
     run_id = os.environ["GITHUB_RUN_ID"]
     attempt = os.environ["GITHUB_RUN_ATTEMPT"]
     if reserve(pr, sha, run_id, attempt):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-            output.write(f"admitted=true\nattempt={attempt}\npr={pr}\nsha={sha}\n")
+            output.write(
+                f"admitted=true\nattempt={attempt}\npr={pr}\nsha={sha}\n"
+                f"branch={branch}\nendpoint={endpoint}/{comment_id}\n"
+            )
         return
     log = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{run_id}/attempts/{attempt}"
     body = f"limit_exhausted\n\nSHA: `{sha}`\n\n[Лог попытки]({log})"
