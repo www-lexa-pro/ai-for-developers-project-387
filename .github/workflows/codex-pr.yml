@@ -1,0 +1,94 @@
+name: Codex по команде в PR
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  admit:
+    if: >-
+      github.repository == 'www-lexa-pro/ai-for-developers-project-387' &&
+      github.event.comment.user.type == 'User' &&
+      github.event.comment.user.login == 'www-lexa-pro' &&
+      startsWith(github.event.comment.body, '/oc ') &&
+      ((github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
+       (github.event_name == 'pull_request_review_comment' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      admitted: ${{ steps.reserve.outputs.admitted }}
+      attempt: ${{ steps.reserve.outputs.attempt }}
+      pr: ${{ steps.reserve.outputs.pr }}
+      sha: ${{ steps.reserve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/heads/main
+          persist-credentials: false
+      - id: reserve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/workflows/codex-pr-budget.py
+
+  codex:
+    needs: admit
+    if: needs.admit.outputs.admitted == 'true' && needs.admit.outputs.attempt == format('{0}', github.run_attempt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: read
+    outputs:
+      answer: ${{ steps.codex.outputs.final-message }}
+    steps:
+      - name: Получить комментарий
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.admit.outputs.pr }}
+          SHA: ${{ needs.admit.outputs.sha }}
+          COMMENT: ${{ github.event.comment.id }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == issue_comment ]]; then
+            endpoint="issues/comments/$COMMENT"
+          else
+            endpoint="pulls/comments/$COMMENT"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/$endpoint" --jq '{body,path,diff_hunk,html_url}' > "$RUNNER_TEMP/request.json"
+          {
+            printf 'Ответь на команду /oc для PR #%s, SHA %s. Данные комментария ниже. Только текстовый ответ, без изменений кода.\n' "$PR" "$SHA"
+            cat "$RUNNER_TEMP/request.json"
+          } > "$RUNNER_TEMP/prompt.md"
+      - uses: openai/codex-action@306c6a196a99dcc6582530c396a19d2672d5e9ec
+        id: codex
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: ${{ runner.temp }}/prompt.md
+          model: gpt-5.4-mini
+          effort: low
+          codex-args: '["--ephemeral"]'
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+  publish:
+    needs: [admit, codex]
+    if: needs.codex.outputs.answer != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.admit.outputs.pr }}
+          SHA: ${{ needs.admit.outputs.sha }}
+          ANSWER: ${{ needs.codex.outputs.answer }}
+        run: |
+          printf 'SHA: `%s`\n\n%s\n' "$SHA" "$ANSWER" |
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F 'body=@-'
