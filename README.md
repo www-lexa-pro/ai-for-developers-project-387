@@ -316,3 +316,5 @@ GitHub Actions принимает `issue_comment: created` для обсужде
 
 Маршрут можно проверить без запуска Codex и обращений к GitHub командой
 `python3 scripts/check-implement-spec.py`.
+
+Эта строка проверяет публикацию PR через GitHub App.
