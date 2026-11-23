@@ -23,7 +23,7 @@ jobs:
         github.event.comment.user.login == 'www-lexa-pro' &&
         (github.event.comment.body == '/codex explain this issue' ||
          github.event.comment.body == '/codex check setup' ||
-         startsWith(github.event.comment.body, '/oc '))))
+         startsWith(github.event.comment.body, '/oc'))))
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -37,9 +37,11 @@ jobs:
         run: |
           # Validate before joining the concurrency group, where a new job can replace a pending one.
           if [[ "$GITHUB_EVENT_NAME" == issue_comment &&
-                "${COMMAND,,}" =~ ^/oc[[:blank:]]+implement-spec([[:space:]]|$) ]]; then
+                "${COMMAND,,}" =~ ^/oc[[:space:]]+implement-spec([[:space:]]|$) ]]; then
             printf '%s\n' 'implementation=true' >> "$GITHUB_OUTPUT"
-          elif [[ "$GITHUB_EVENT_NAME" == issues || "${COMMAND,,}" != '/oc '* || "${COMMAND:4}" =~ [^[:space:]] ]]; then
+          elif [[ "$GITHUB_EVENT_NAME" == issues || "${COMMAND,,}" == '/codex explain this issue' ||
+                  "${COMMAND,,}" == '/codex check setup' ||
+                  ( "${COMMAND,,}" == '/oc '* && "${COMMAND:4}" =~ [^[:space:]] ) ]]; then
             printf '%s\n' 'accepted=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -266,7 +268,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: refs/heads/main
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Проверить согласование и зависимости

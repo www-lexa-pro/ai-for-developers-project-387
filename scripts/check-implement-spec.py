@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 workflow = Path(".github/workflows/codex-issue.yml").read_text()
+assert "ref: ${{ github.sha }}" in workflow.split("\n  implement-spec:", 1)[1]
 gate = workflow.split("          # Validate before", 1)[1].split("\n\n  codex:", 1)[0]
 gate = gate.split("\n", 1)[1]
 gate = "\n".join(line[10:] for line in gate.splitlines())
@@ -12,6 +13,9 @@ with tempfile.TemporaryDirectory() as directory:
     out = Path(directory, "output")
     for command, expected in [
         ("/oc implement-spec #10", "implementation=true"),
+        ("/oc \nimplement-spec #10", "implementation=true"),
+        ("/oc\nimplement-spec #10", "implementation=true"),
+        ("/octopus", ""),
         ("/oc implement-spec", "implementation=true"),
         ("/oc to-spec", "accepted=true"),
         ("/oc to-tickets #10", "accepted=true"),
@@ -35,8 +39,8 @@ blocker = {"number": 11, "repository_url": api_url}
 data = {
     "issues/5": {"state": "open"},
     f"issues/comments/{module['APPROVAL']}": approval,
-    "issues/10": {"state": "open", "body": "<!-- codex-spec source=5 -->"},
-    "issues/10/sub_issues": [{"number": n, "state": "open", "body": str(n)} for n in (11, 12, 13)],
+    "issues/10": {"state": "open", "body": "<!-- codex-spec source=5 -->", "updated_at": time},
+    "issues/10/sub_issues": [{"number": n, "state": "open", "body": str(n), "updated_at": time} for n in (11, 12, 13)],
     "issues/11/dependencies/blocked_by": [],
     "issues/12/dependencies/blocked_by": [blocker],
     "issues/13/dependencies/blocked_by": [blocker],
@@ -55,7 +59,11 @@ for key in ("mode", "source", "spec", "order"):
 for target, key, invalid in [
     (event["comment"], "user", {"login": "other", "type": "User"}),
     (event["comment"], "body", "/oc implement-spec #99"),
+    (event["comment"], "body", "/oc \nimplement-spec #10"),
     (approval, "body", "позже"),
+    (data["issues/10"], "updated_at", "2026-11-24T00:00:00Z"),
+    *((ticket, "updated_at", "2026-11-24T00:00:00Z")
+      for ticket in data["issues/10/sub_issues"]),
     (data, "issues/12/dependencies/blocked_by", []),
 ]:
     old = target[key]

@@ -51,6 +51,7 @@ def route(event):
 
 def prepare(event):
     source, number = route(event)
+    requested_at = event["comment"]["created_at"]
     issue = api(f"issues/{source}")
     require(issue["state"] == "open", "Исходное обращение закрыто.")
     approval = api(f"issues/comments/{APPROVAL}")
@@ -59,17 +60,20 @@ def prepare(event):
         and approval["user"]["login"] == OWNER
         and approval["user"]["type"] == "User"
         and approval["body"].strip() == AGREEMENT
-        and approval["updated_at"] <= event["comment"]["created_at"],
+        and approval["updated_at"] <= requested_at,
         "Не найдено действующее согласование владельца по #10 и #11–#13.",
     )
     spec = api(f"issues/{number}")
     require(spec["state"] == "open" and spec["body"].startswith("<!-- codex-spec source=5 -->"),
             "Спецификация закрыта или не связана с исходным обращением.")
+    require(spec["updated_at"] <= requested_at, "Спецификация #10 изменилась после команды.")
     tickets = {ticket["number"]: ticket for ticket in api(f"issues/{number}/sub_issues", pages=True)}
     require(set(tickets) == {11, 12, 13}, "Состав тикетов отличается от согласованного.")
     graph = {11: set(), 12: {11}, 13: {11}}
     for ticket, expected in graph.items():
         require(tickets[ticket]["state"] == "open", f"Изменился статус тикета #{ticket}.")
+        require(tickets[ticket]["updated_at"] <= requested_at,
+                f"Тикет #{ticket} изменился после команды.")
         blockers = api(f"issues/{ticket}/dependencies/blocked_by", pages=True)
         local = {item["number"] for item in blockers
                  if item["repository_url"] == f"https://api.github.com/repos/{REPO}"}
