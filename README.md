@@ -340,3 +340,15 @@ GitHub Actions принимает `issue_comment: created` для обсужде
 После разрешённого запуска проверьте в Actions отдельно реализацию
 и публикацию, затем сравните SHA из описания PR с SHA ветки и
 убедитесь, что автор PR — `hexlet-ai[bot]`.
+
+## Аудит доступности календаря
+
+Workflow **Аудит календаря** проверяет страницу по адресу из переменной GitHub Actions `APP_URL`. Запуск по расписанию запрошен ежедневно в 06:17 UTC. GitHub может начать его позже.
+
+Чтобы запустить проверку вручную, откройте **Actions → Аудит календаря → Run workflow**, выберите ветку `main` и нажмите **Run workflow**. Для проверки сайта оставьте `training` выключенным. Чтобы воспроизвести учебную находку, включите `training`. В этом режиме workflow имитирует HTTP 503 без запроса к сайту и помечает отчёт и задачу как учебные.
+
+На странице завершённого прогона в разделе **Artifacts** скачайте архив `calendar-audit`. В файле `calendar-audit.txt` указаны адрес и HTTP-статус или ошибка запроса. Артефакт сохраняется и при недоступности страницы. Краткие итоги со ссылками на прогоны публикуются в [тикете #39](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/39).
+
+- [Обычный прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45193330177)
+- [Учебный прогон](https://github.com/www-lexa-pro/ai-for-developers-project-387/actions/runs/45191427864)
+- [Учебная задача #42](https://github.com/www-lexa-pro/ai-for-developers-project-387/issues/42)
