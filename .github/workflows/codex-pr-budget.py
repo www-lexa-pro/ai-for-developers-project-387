@@ -39,6 +39,22 @@ def reserve(pr, sha, run_id, attempt):
     return False
 
 
+def command_timestamp(pr, comment, discussion):
+    created = comment["created_at"]
+    updated = comment["updated_at"]
+    if created == updated:
+        return created
+
+    # Submit review updates pending inline comments even when their text is unchanged.
+    review_id = comment.get("pull_request_review_id")
+    if discussion or not isinstance(review_id, int) or review_id <= 0:
+        return None
+    review = read(f"pulls/{pr}/reviews/{review_id}")
+    if review["user"]["id"] == comment["user"]["id"] and review.get("submitted_at") == updated:
+        return updated
+    return None
+
+
 def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     source = event["workflow_run"]
@@ -63,15 +79,16 @@ def main():
     expected += f"/{'issues' if discussion else 'pulls'}/{pr}"
     if (
         target != expected
-        or not timedelta(0) <= (
-            datetime.fromisoformat(source["created_at"]) - datetime.fromisoformat(comment["created_at"])
-        ) <= timedelta(minutes=5)
-        or comment["updated_at"] != comment["created_at"]
         or comment["user"]["id"] != source["actor"]["id"]
         or comment["user"]["type"] != "User"
         or comment["user"]["login"] != OWNER
         or not re.match(r"^/oc +\S", comment["body"].lstrip(), re.IGNORECASE)
     ):
+        return
+    timestamp = command_timestamp(pr, comment, discussion)
+    if timestamp is None or not timedelta(0) <= (
+        datetime.fromisoformat(source["created_at"]) - datetime.fromisoformat(timestamp)
+    ) <= timedelta(minutes=5):
         return
     pull = read(f"pulls/{pr}")
     if pull["state"] != "open" or (pull["head"]["repo"] or {}).get("full_name") != os.environ["GITHUB_REPOSITORY"]:
