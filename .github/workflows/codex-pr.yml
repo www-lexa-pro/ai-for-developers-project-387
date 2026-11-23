@@ -14,7 +14,7 @@ jobs:
       github.repository == 'www-lexa-pro/ai-for-developers-project-387' &&
       github.event.comment.user.type == 'User' &&
       github.event.comment.user.login == 'www-lexa-pro' &&
-      startsWith(github.event.comment.body, '/oc ') &&
+      contains(github.event.comment.body, '/oc ') &&
       ((github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
        (github.event_name == 'pull_request_review_comment' &&
         github.event.pull_request.head.repo.full_name == github.repository))
