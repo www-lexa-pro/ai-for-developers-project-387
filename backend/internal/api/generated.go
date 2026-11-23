@@ -180,6 +180,7 @@ type Booking struct {
 	MeetingTypeName string    `json:"meetingTypeName"`
 	Name            string    `json:"name"`
 	Start           time.Time `json:"start"`
+	Topic           *string   `json:"topic,omitempty"`
 }
 
 // BookingConflict defines model for BookingConflict.
@@ -193,10 +194,11 @@ type BookingConflictCode string
 
 // CreateBookingInput defines model for CreateBookingInput.
 type CreateBookingInput struct {
-	Email         string `json:"email"`
-	MeetingTypeId string `json:"meetingTypeId"`
-	Name          string `json:"name"`
-	Start         string `json:"start"`
+	Email         string  `json:"email"`
+	MeetingTypeId string  `json:"meetingTypeId"`
+	Name          string  `json:"name"`
+	Start         string  `json:"start"`
+	Topic         *string `json:"topic,omitempty"`
 }
 
 // CreateMeetingTypeInput defines model for CreateMeetingTypeInput.

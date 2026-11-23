@@ -35,6 +35,13 @@ func (s *server) CreateBooking(_ context.Context, request api.CreateBookingReque
 	if len(fields) > 0 {
 		return api.CreateBooking422JSONResponse{Code: api.ValidationErrorCodeValidationError, Message: "Проверьте поля формы", Fields: fields}, nil
 	}
+	var topic *string
+	if input.Topic != nil {
+		trimmed := strings.TrimSpace(*input.Topic)
+		if trimmed != "" {
+			topic = &trimmed
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, meetingType := range s.meetingTypes {
@@ -62,7 +69,7 @@ func (s *server) CreateBooking(_ context.Context, request api.CreateBookingReque
 		if !allowed {
 			return api.CreateBooking409JSONResponse{Code: api.InvalidTime, Message: "Выберите новое время: прежнее время больше не входит в расписание или окно записи"}, nil
 		}
-		confirmation := api.Booking{Id: rand.Text(), MeetingTypeId: meetingType.Id, MeetingTypeName: meetingType.Name, DurationMinutes: meetingType.DurationMinutes, Start: start.In(moscow), End: start.Add(time.Duration(meetingType.DurationMinutes) * time.Minute).In(moscow), Name: name, Email: email}
+		confirmation := api.Booking{Id: rand.Text(), MeetingTypeId: meetingType.Id, MeetingTypeName: meetingType.Name, DurationMinutes: meetingType.DurationMinutes, Start: start.In(moscow), End: start.Add(time.Duration(meetingType.DurationMinutes) * time.Minute).In(moscow), Name: name, Email: email, Topic: topic}
 		for _, booking := range s.bookings {
 			if overlaps(confirmation.Start, confirmation.End, booking) {
 				return api.CreateBooking409JSONResponse{Code: api.TimeBusy, Message: "Это время уже занято"}, nil
