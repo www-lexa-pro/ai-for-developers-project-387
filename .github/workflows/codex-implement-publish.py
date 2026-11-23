@@ -1,6 +1,7 @@
 """Find or publish the single implementation PR for the approved specification."""
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,17 @@ BASE = "main"
 
 def run(*args):
     return subprocess.check_output(args, text=True).strip()
+
+
+def verified_pr(pr, checked_sha=None):
+    if pr["base"]["ref"] != BASE:
+        raise ValueError(f"Целевая ветка PR изменена на {pr['base']['ref']}. {pr['html_url']}")
+    recorded = re.findall(r"^- `mise run check` — успешно на `([0-9a-f]{40})`\.", pr["body"] or "", re.M)
+    if len(recorded) != 1 or pr["head"]["sha"] != recorded[0] or (
+        checked_sha is not None and checked_sha != recorded[0]
+    ):
+        raise ValueError(f"SHA PR отличается от проверенного или запись о проверке отсутствует. {pr['html_url']}")
+    return pr["html_url"]
 
 
 def main(mode):
@@ -26,13 +38,13 @@ def main(mode):
 
     pages = json.loads(run(
         "gh", "api", "--paginate", "--slurp", "--method", "GET", f"repos/{repo}/pulls",
-        "-f", f"base={BASE}", "-f", f"head={owner}:{BRANCH}", "-f", "state=all",
+        "-f", f"head={owner}:{BRANCH}", "-f", "state=all",
     ))
     pulls = [pr for page in pages for pr in page]
     if pulls:
         if len(pulls) != 1 or str(pulls[0]["user"]["id"]) != token_id:
             raise ValueError("Для ветки найден чужой PR или несколько PR.")
-        output("pr", pulls[0]["html_url"])
+        output("pr", verified_pr(pulls[0], os.environ["CHECKED_SHA"] if mode == "publish" else None))
         return
 
     ref = run("git", "ls-remote", "origin", REF)
@@ -77,8 +89,12 @@ def main(mode):
 Отменить коммиты этого PR в Git и повторить бронирование без темы
 и просмотр предстоящих записей. Проверить полный набор через `mise run check`.
 """
-    output("pr", run("gh", "pr", "create", "--repo", repo, "--base", BASE, "--head", BRANCH,
-                     "--title", "Показать тему звонка в списке предстоящих записей", "--body", body))
+    created = json.loads(run(
+        "gh", "api", "--method", "POST", f"repos/{repo}/pulls",
+        "-f", f"base={BASE}", "-f", f"head={BRANCH}",
+        "-f", "title=Показать тему звонка в списке предстоящих записей", "-f", f"body={body}",
+    ))
+    output("pr", verified_pr(created, sha))
 
 
 def output(name, value):

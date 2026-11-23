@@ -93,7 +93,13 @@ sha = "a" * 40
 pr_url = f"https://github.com/{repo}/pull/99"
 
 
-def publication(mode, *, pulls=(), remote="", app_id="123", checked_sha=sha):
+def pull(head_sha=sha, base="main"):
+    return {"user": {"id": 123}, "html_url": pr_url, "head": {"sha": head_sha},
+            "base": {"ref": base}, "body": f"- `mise run check` — успешно на `{sha}`."}
+
+
+def publication(mode, *, pulls=(), remote="", app_id="123", checked_sha=sha,
+                created_sha=sha, expected_error=None):
     calls, outputs = [], {}
 
     def fake_run(*args):
@@ -101,14 +107,15 @@ def publication(mode, *, pulls=(), remote="", app_id="123", checked_sha=sha):
         if args[:3] == ("gh", "api", "users/hexlet-ai%5Bbot%5D"):
             return app_id
         if args[:3] == ("gh", "api", "--paginate"):
+            assert not any(arg.startswith("base=") for arg in args)
             return json.dumps([pulls])
         if args[:2] == ("git", "ls-remote"):
             return remote
         if args[:2] == ("git", "rev-parse"):
             return checked_sha
-        if args[:3] == ("gh", "pr", "create"):
+        if args[:4] == ("gh", "api", "--method", "POST"):
             assert sha in args[-1] and "attempts/2" in args[-1]
-            return pr_url
+            return json.dumps(pull(created_sha))
         return ""
 
     with tempfile.TemporaryDirectory() as directory:
@@ -121,14 +128,23 @@ def publication(mode, *, pulls=(), remote="", app_id="123", checked_sha=sha):
             "GITHUB_EVENT_PATH": str(event_path), "GITHUB_SERVER_URL": "https://github.com",
             "GITHUB_RUN_ID": "1234",
         }), patch.dict(publisher.__globals__, {"run": fake_run, "output": outputs.__setitem__}):
-            publisher(mode)
+            if expected_error:
+                try:
+                    publisher(mode)
+                except ValueError as error:
+                    assert expected_error in str(error), str(error)
+                else:
+                    raise AssertionError(expected_error)
+                assert outputs == {}
+            else:
+                publisher(mode)
     return calls, outputs
 
 
 calls, outputs = publication("publish")
 assert outputs == {"pr": pr_url}
 assert sum(args[:2] == ("git", "push") for args in calls) == 1
-calls, outputs = publication("inspect", pulls=[{"user": {"id": 123}, "html_url": pr_url}])
+calls, outputs = publication("inspect", pulls=[pull()])
 assert outputs == {"pr": pr_url} and len(calls) == 1
 calls, outputs = publication("publish", remote=f"{sha}\trefs/heads/implement/spec-10")
 assert outputs == {"pr": pr_url} and all(args[:2] != ("git", "push") for args in calls)
@@ -142,3 +158,15 @@ for invalid in ({"app_id": "456"}, {"remote": "b" * 40}, {"checked_sha": "b" * 4
         raise AssertionError(invalid)
 assert "always()" not in workflow.split("\n  publish-implementation:", 1)[1].split("\n  report-", 1)[0]
 print("Публикация, повторный запуск и восстановление после push проверены на имитации GitHub.")
+
+for changed, message in [
+    (pull(head_sha="b" * 40), "SHA PR отличается"),
+    (pull(base="another-base"), "Целевая ветка PR изменена на another-base"),
+]:
+    calls, _ = publication("inspect", pulls=[changed], expected_error=message)
+    assert len(calls) == 1
+    print(f"Повторный запуск остановлен: {message}.")
+
+calls, _ = publication("publish", created_sha="b" * 40, expected_error="SHA PR отличается")
+assert any(args[:4] == ("gh", "api", "--method", "POST") for args in calls)
+print("Созданный PR с другим head.sha не подтверждён.")
