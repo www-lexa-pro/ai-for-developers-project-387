@@ -1,0 +1,60 @@
+name: Проверка публикации через GitHub App
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-implement-app-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: implement-publish
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
+        id: app
+        with:
+          client-id: ${{ vars.IMPLEMENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.IMPLEMENT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Проверить ID и открыть тестовый PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          TRUSTED_BOT_ID: ${{ vars.PR_REVIEW_APP_BOT_ID }}
+        run: |
+          login="${APP_SLUG}[bot]"
+          user_id=$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          if [[ -z "$TRUSTED_BOT_ID" || "$user_id" != "$TRUSTED_BOT_ID" ]]; then
+            echo 'ID приложения не совпадает с PR_REVIEW_APP_BOT_ID.' >&2
+            exit 1
+          fi
+
+          branch="test/hexlet-ai-$GITHUB_RUN_ID"
+          if ! git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null; then
+            git config user.name "$login"
+            git config user.email "$user_id+$login@users.noreply.github.com"
+            gh auth setup-git
+            printf '\nЭта строка проверяет публикацию PR через GitHub App.\n' >> README.md
+            git add README.md
+            git commit -m 'docs: проверить публикацию PR через GitHub App' -m 'Refs #24'
+            git push origin "HEAD:refs/heads/$branch"
+          fi
+
+          pr=$(gh pr list --base main --head "$branch" --state all --json url --jq '.[0].url // empty')
+          if [[ -z "$pr" ]]; then
+            pr=$(gh pr create --base main --head "$branch" \
+              --title 'Тест публикации PR от имени hexlet-ai' \
+              --body 'Проверка токена GitHub App и автоматического запуска авторевью. После проверки PR можно закрыть.')
+          fi
+          printf 'Тестовый PR: %s\n' "$pr" >> "$GITHUB_STEP_SUMMARY"
